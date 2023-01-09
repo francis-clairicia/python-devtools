@@ -8,6 +8,7 @@ import venv
 from argparse import ArgumentParser
 from typing import Any, final
 
+from ..context import Context
 from .abc import AbstractCommand, Configuration
 
 
@@ -21,7 +22,7 @@ class VenvCommand(AbstractCommand):
         return super().get_parser_kwargs() | {"help": "Create and setup the virtual env"}
 
     @classmethod
-    def register_to_parser(cls, parser: ArgumentParser) -> None:
+    def register_to_parser(cls, parser: ArgumentParser, context: Context) -> None:
         pass
 
     def run(self, __args: Any, /) -> int:

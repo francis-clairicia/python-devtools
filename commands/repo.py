@@ -5,7 +5,7 @@ __all__ = ["RepoCommand"]
 from argparse import ArgumentParser
 from typing import Any, final
 
-from ..constants import REQUIREMENTS_FILES
+from ..context import Context
 from .abc import AbstractCommand, Configuration
 from .piptools import PipCompileCommand, PipSyncCommand
 from .venv import VenvCommand
@@ -21,7 +21,7 @@ class RepoCommand(AbstractCommand):
         return super().get_parser_kwargs() | {"help": "Setup the repository for development"}
 
     @classmethod
-    def register_to_parser(cls, parser: ArgumentParser) -> None:
+    def register_to_parser(cls, parser: ArgumentParser, context: Context) -> None:
         parser.add_argument("-s", "--no-sync", dest="pip_sync", action="store_false", help="Do not run 'pip-sync'")
 
     def run(self, args: Any, /) -> int:
@@ -34,6 +34,6 @@ class RepoCommand(AbstractCommand):
         if config.venv_dir is not None:
             VenvCommand(config).create()
         self.ensure_piptools()
-        PipCompileCommand(config).compile_all(REQUIREMENTS_FILES)
+        PipCompileCommand(config).compile_all(list(config.context.requirements_files))
         if pip_sync:
             PipSyncCommand(config).sync()

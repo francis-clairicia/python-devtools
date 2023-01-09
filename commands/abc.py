@@ -14,10 +14,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
+from ..context import Context
+
 
 @dataclass
 class Configuration:
     venv_dir: Path | None
+    context: Context
 
     def get_exec_bin(self, name: str) -> str:
         venv_dir = self.venv_dir
@@ -44,7 +47,7 @@ class AbstractCommand(metaclass=ABCMeta):
 
     @classmethod
     @abstractmethod
-    def register_to_parser(cls, parser: ArgumentParser) -> None:
+    def register_to_parser(cls, parser: ArgumentParser, context: Context) -> None:
         raise NotImplementedError
 
     @abstractmethod

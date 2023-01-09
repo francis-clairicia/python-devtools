@@ -13,6 +13,7 @@ from .commands.abc import AbstractCommand, Configuration
 from .commands.piptools import EnsurePipToolsInstalledCommand, PipCompileCommand, PipSyncCommand, PipUpgradeCommand
 from .commands.repo import RepoCommand
 from .commands.venv import VenvCommand
+from .context import load_context_from_file
 
 COMMANDS: MappingProxyType[str, type[AbstractCommand]] = MappingProxyType(
     {
@@ -27,10 +28,11 @@ COMMANDS: MappingProxyType[str, type[AbstractCommand]] = MappingProxyType(
 
 
 class CustomNamespace(Namespace):
-    __slots__ = ("venv_dir", "command")
+    __slots__ = ("venv_dir", "command", "config_file")
 
 
 def main(args: list[str] | None = None) -> int:
+    context = load_context_from_file(".devtools.cfg")
     parser = ArgumentParser(prog=__package__, formatter_class=ArgumentDefaultsHelpFormatter)
 
     default_venv_dir = Path(os.environ.get("VIRTUAL_ENV", ".venv"))
@@ -64,14 +66,15 @@ def main(args: list[str] | None = None) -> int:
                 command_name,
                 formatter_class=ArgumentDefaultsHelpFormatter,
                 **command_hander.get_parser_kwargs(),
-            )
+            ),
+            context,
         )
 
     parsed_args = parser.parse_args(args, namespace=CustomNamespace())
 
     command_cls: type[AbstractCommand] = COMMANDS[parsed_args.command]
 
-    config = Configuration(venv_dir=parsed_args.venv_dir)
+    config = Configuration(venv_dir=parsed_args.venv_dir, context=context)
 
     command: AbstractCommand = command_cls(config)
 

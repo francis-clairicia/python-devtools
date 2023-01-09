@@ -4,12 +4,11 @@ from __future__ import annotations
 
 __all__ = ["EnsurePipToolsInstalledCommand", "PipCompileCommand", "PipSyncCommand"]
 
-import re
 from argparse import ArgumentParser, ArgumentTypeError
 from pathlib import Path
 from typing import Any, Sequence, final
 
-from ..constants import REQUIREMENTS_FILES, REQUIREMENTS_FILES_EXTRA_REQUIRES, REQUIREMENTS_FILES_INPUT
+from ..context import Context
 from .abc import AbstractCommand, Configuration
 from .venv import VenvCommand
 
@@ -64,27 +63,17 @@ class PipCompileCommand(_AbstractPipToolsCommand):
         return super().get_parser_kwargs() | {"help": "manage requirements.txt files"}
 
     @classmethod
-    def register_to_parser(cls, parser: ArgumentParser) -> None:
+    def register_to_parser(cls, parser: ArgumentParser, context: Context) -> None:
         parser.add_argument(
             "--files",
-            type=cls.validate_filename,
             nargs="*",
-            choices=REQUIREMENTS_FILES,
-            default=REQUIREMENTS_FILES,
+            choices=list(context.requirements_files),
+            default=list(context.requirements_files),
             help="requirements.txt files to compile",
         )
         parser.add_argument(
             "pip_compile_args", type=cls.validate_posarg, default=[], nargs="*", metavar="OPTION", help="pip-compile options"
         )
-
-    @staticmethod
-    def validate_filename(file: str) -> str:
-        filename = Path(file).name
-        if re.match(r"^requirements(-\w+)?\.txt$", filename) is None:
-            raise ArgumentTypeError(f"Invalid filename {filename!r}")
-        if filename not in REQUIREMENTS_FILES_INPUT:
-            raise ArgumentTypeError(f"Unknown filename {filename!r}")
-        return file
 
     def run(self, args: Any) -> int:
         pip_compile_args: Sequence[str] = args.pip_compile_args
@@ -98,11 +87,12 @@ class PipCompileCommand(_AbstractPipToolsCommand):
             self.compile(requirement_file, *options)
 
     def compile(self, requirement_file: str, *options: str) -> None:
+        context = self.config.context
         extended_options: list[str] = []
         requirement_filename = Path(requirement_file).name
-        requirement_input: str = REQUIREMENTS_FILES_INPUT[requirement_filename]
-        if requirement_filename in REQUIREMENTS_FILES_EXTRA_REQUIRES:
-            extra_requires: tuple[str, ...] | None = REQUIREMENTS_FILES_EXTRA_REQUIRES[requirement_filename]
+        requirement_input: str = context.requirements_files[requirement_filename]
+        if requirement_filename in context.requirements_files_extra_requires:
+            extra_requires: tuple[str, ...] | None = context.requirements_files_extra_requires[requirement_filename]
             if extra_requires is None:
                 extended_options.append("--all-extras")
             else:
@@ -122,7 +112,7 @@ class PipSyncCommand(_AbstractPipToolsCommand):
         return super().get_parser_kwargs() | {"help": "keep your virtual env up-to-date with requirements.txt directives"}
 
     @classmethod
-    def register_to_parser(cls, parser: ArgumentParser) -> None:
+    def register_to_parser(cls, parser: ArgumentParser, context: Context) -> None:
         parser.add_argument("-c", "--compile", action="store_true", help="Call pip-compile before sync")
         parser.add_argument(
             "pip_sync_args", type=cls.validate_posarg, default=[], nargs="*", metavar="OPTION", help="pip-sync options"
@@ -137,9 +127,9 @@ class PipSyncCommand(_AbstractPipToolsCommand):
         VenvCommand(self.config).create()
 
         if compile_before:
-            PipCompileCommand(self.config).compile_all(REQUIREMENTS_FILES)
+            PipCompileCommand(self.config).compile_all(list(self.config.context.requirements_files))
 
-        self.exec_piptools_command(*self.default_options, *options, *REQUIREMENTS_FILES, check=True)
+        self.exec_piptools_command(*self.default_options, *options, *self.config.context.requirements_files, check=True)
         self.exec_module("pip", "install", "--no-deps", "--no-build-isolation", "--editable", ".")
 
 
@@ -150,7 +140,7 @@ class PipUpgradeCommand(AbstractCommand):
         return super().get_parser_kwargs() | {"help": "Upgrade dependencies if possible"}
 
     @classmethod
-    def register_to_parser(cls, parser: ArgumentParser) -> None:
+    def register_to_parser(cls, parser: ArgumentParser, context: Context) -> None:
         pass
 
     def run(self, __args: Any, /) -> int:
@@ -159,7 +149,7 @@ class PipUpgradeCommand(AbstractCommand):
 
     def upgrade(self) -> None:
         config = self.config
-        PipCompileCommand(config).compile_all(REQUIREMENTS_FILES, "--upgrade")
+        PipCompileCommand(config).compile_all(list(config.context.requirements_files), "--upgrade")
         PipSyncCommand(config).sync()
 
 
@@ -170,7 +160,7 @@ class EnsurePipToolsInstalledCommand(AbstractCommand):
         return super().get_parser_kwargs() | {"help": "Install pip-tools package if unavailable"}
 
     @classmethod
-    def register_to_parser(cls, parser: ArgumentParser) -> None:
+    def register_to_parser(cls, parser: ArgumentParser, context: Context) -> None:
         pass
 
     def run(self, __args: Any, /) -> int:
